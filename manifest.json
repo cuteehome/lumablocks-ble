@@ -1,0 +1,21 @@
+{
+  "domain": "lumablocks_ble",
+  "name": "LumaBlocks BLE",
+  "version": "1.0.0",
+  "integration_type": "hub",
+  "bluetooth": [
+    {
+      "local_name": "RF-*"
+    }
+  ],
+  "dependencies": [
+    "bluetooth"
+  ],
+  "requirements": [],
+  "codeowners": [
+    "@mars"
+  ],
+  "config_flow": true,
+  "logo": "logo.png",
+  "icon": "mdi:leak"
+}

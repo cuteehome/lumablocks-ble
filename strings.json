@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "description": "发现 LumaBlocks BLE 设备 {name}，确认添加到 Home Assistant。"
+      },
+      "pick_device": {
+        "description": "选择要添加的 LumaBlocks 设备",
+        "data": {
+          "address": "设备"
+        }
+      }
+    },
+    "abort": {
+      "no_devices_found": "未发现广播中的 LumaBlocks 设备，请确认设备已上电。"
+    }
+  }
+}
