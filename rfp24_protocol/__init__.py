@@ -1,4 +1,4 @@
-"""RFP/RFM 24G 雷达私有协议编解码（协议版本 V2.21）。
+"""RFP/RFM 24G 雷达私有协议编解码（协议版本 V2.22）。
 
 用法::
 
@@ -49,16 +49,19 @@ from .probe import (
 )
 from .payloads import (
     Ack,
+    ControllerChange,
     QueryResult,
     SpectrumReport,
     TargetLightReport,
     build_device_frame,
     build_host_frame,
     decode_ack,
+    decode_controller_change,
     decode_query_response,
     decode_response,
     decode_spectrum_report,
     decode_target_light_report,
+    decode_version_response,
     encode_brightness,
     encode_cct,
     encode_fan_direction,
@@ -81,10 +84,10 @@ __all__ = [
     "SPECTRUM_BINS", "SPECTRUM_PAYLOAD_LEN",
     "FrameError", "ParsedFrame", "build_frame", "calc_check16",
     "extract_frames", "parse_frame",
-    "Ack", "QueryResult", "SpectrumReport", "TargetLightReport",
+    "Ack", "ControllerChange", "QueryResult", "SpectrumReport", "TargetLightReport",
     "build_device_frame", "build_host_frame",
-    "decode_ack", "decode_query_response", "decode_response",
-    "decode_spectrum_report", "decode_target_light_report",
+    "decode_ack", "decode_controller_change", "decode_query_response", "decode_response",
+    "decode_spectrum_report", "decode_target_light_report", "decode_version_response",
     "encode_brightness", "encode_cct", "encode_fan_direction",
     "encode_fan_speed", "encode_fan_switch", "encode_light_switch",
     "encode_query", "encode_report_config", "encode_thresholds13",

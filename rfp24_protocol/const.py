@@ -1,6 +1,6 @@
 """RFP/RFM 24G 毫米波雷达私有协议常量。
 
-依据《RFP/RFM 24G 毫米波雷达传感器通信协议说明书》V2.21（广东锐泛感知）。
+依据《RFP/RFM 24G 毫米波雷达传感器通信协议说明书》V2.22（广东锐泛感知）。
 帧经 BLE GATT 封装传输：网关/HA 为上位机（0x59），子设备为雷达侧（0x58）。
 """
 
@@ -43,11 +43,16 @@ class MsgID(IntEnum):
     REPORT_MICRO_SPECTRUM = 0x52 # 雷达→上位机: [seq u16][39B 频谱]
     REPORT_PRESENCE_SPECTRUM = 0x53
     STOP_REPORT = 0x54           # 停止所有连续上报
+    CONTROLLER_CHANGE = 0x57     # 控制器状态变化上报(v2.22): 雷达→上位机 [子命令ID][新值]
 
     # ---- 系统 ----
     SET_RF_SWITCH = 0x60         # 雷达射频开关, uint8, 掉电保存
     SET_LIGHT_SWITCH = 0x61      # 光敏功能开关, uint8, 掉电保存
     FIND_DEVICE = 0x62           # 寻找设备(闪灯), 空 Payload
+    SET_LIGHT_LINKAGE = 0x63     # 灯联动开关(v2.22): 0=关联动(冻结并上锁) 1=开联动
+    SET_FAN_LINKAGE = 0x64       # 风扇联动开关(v2.22), 同 0x63
+    QUERY_VERSION = 0x65         # 版本查询(v2.22) → ASCII 版本串
+    SYSTEM_RESET = 0x66          # 系统复位(v2.22), 软重启
 
     # ---- 专用指令（风扇灯/吸顶灯/色温灯，5.2 转发模型）----
     FAN_SWITCH = 0x70            # 0 关 / 1 开

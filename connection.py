@@ -16,10 +16,12 @@ from .rfp24_protocol import (
     Capability,
     MsgID,
     build_host_frame,
+    decode_controller_change,
     decode_query_response,
     decode_response,
     decode_spectrum_report,
     decode_target_light_report,
+    decode_version_response,
     encode_brightness,
     encode_cct,
     encode_fan_direction,
@@ -71,9 +73,11 @@ class RFPDevice:
         # 待处理的 0x40 查询：future 完成时携带 QueryResult 或 Ack(错误)
         self._pending_query: asyncio.Future | None = None
         self._pending_ack: asyncio.Future | None = None
+        self._pending_version: asyncio.Future | None = None
 
         # 能力（连接探测后填充）
         self.capabilities: dict[Capability, bool] = {}
+        self.fw_version: str | None = None  # 0x65 查询结果
 
         # 上报状态缓存（实体从这里读）
         self.target: bool | None = None
@@ -100,6 +104,7 @@ class RFPDevice:
         await asyncio.sleep(0.3)
         await self._probe_capabilities()
         await self._restore_light_state()
+        await self._query_version()
         await self._start_reporting()
 
     async def async_refresh(self) -> None:
@@ -170,6 +175,19 @@ class RFPDevice:
             self._notify()
         elif f.msg_id in (MsgID.REPORT_MICRO_SPECTRUM, MsgID.REPORT_PRESENCE_SPECTRUM):
             decode_spectrum_report(f.payload)  # 校验，暂不落地实体
+        elif f.msg_id == MsgID.CONTROLLER_CHANGE:
+            # 0x57 控制器状态变化上报（v2.22）：遥控器/按键改动，同步本地缓存
+            try:
+                ch = decode_controller_change(f.payload)
+            except ValueError:
+                _LOGGER.debug("0x57 上报解析失败: %s", f.payload.hex())
+            else:
+                self._apply_controller_change(ch)
+                self._notify()
+        elif f.msg_id == MsgID.QUERY_VERSION:
+            # 0x65 版本查询响应（v2.22）：ASCII 串或单字节错误码
+            if self._pending_version is not None and not self._pending_version.done():
+                self._pending_version.set_result(decode_version_response(f.payload))
         elif f.msg_id == MsgID.QUERY_PARAMS:
             if len(f.payload) > 1:  # 查询成功（参数+值）
                 try:
@@ -217,6 +235,22 @@ class RFPDevice:
         except (KeyError, ValueError):
             pass
 
+    def _apply_controller_change(self, ch) -> None:
+        """把 0x57 上报的遥控器/按键改动写回状态缓存."""
+        if ch.sub_cmd == MsgID.LIGHT_SWITCH:
+            self.light_on = ch.value == 1
+        elif ch.sub_cmd == MsgID.LIGHT_BRIGHTNESS:
+            self.brightness = ch.value
+        elif ch.sub_cmd == MsgID.LIGHT_CCT:
+            self.cct = ch.value
+        elif ch.sub_cmd == MsgID.FAN_SWITCH:
+            self.fan_on = ch.value == 1
+        elif ch.sub_cmd == MsgID.FAN_SPEED:
+            self.fan_speed = ch.value
+            self.fan_on = ch.value > 0
+        elif ch.sub_cmd == MsgID.FAN_DIRECTION:
+            self.fan_direction = ch.value
+
     def _notify(self) -> None:
         from . import send_update
 
@@ -262,6 +296,28 @@ class RFPDevice:
             await self._query(_FAN_STATE_PARAMS)
         if self.capabilities.get(Capability.PRESENCE):
             await self._query(_PRESENCE_PARAMS)
+
+    async def _query_version(self, timeout: float = 2.0) -> None:
+        """0x65 版本查询（v2.22）：固件不支持时静默跳过."""
+        client = await self._ensure_connected()
+        loop = asyncio.get_running_loop()
+        async with self._lock:
+            self._pending_version = loop.create_future()
+            try:
+                await client.write_gatt_char(
+                    TX_CHAR_UUID, build_host_frame(MsgID.QUERY_VERSION, b"\x00"),
+                    response=False,
+                )
+                version = await asyncio.wait_for(self._pending_version, timeout)
+            except asyncio.TimeoutError:
+                version = None
+            finally:
+                self._pending_version = None
+        if version:
+            self.fw_version = version
+            _LOGGER.info("设备 %s 固件版本: %s", self.entry.data.get("name"), version)
+        else:
+            _LOGGER.debug("0x65 版本查询无响应（旧固件不支持）")
 
     async def _start_reporting(self) -> None:
         if self.capabilities.get(Capability.PRESENCE):

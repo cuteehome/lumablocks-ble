@@ -23,10 +23,11 @@ from .frames import build_frame, calc_check16
 
 __all__ = [
     "build_host_frame", "build_device_frame",
-    "Ack", "TargetLightReport", "SpectrumReport", "QueryResult",
+    "Ack", "TargetLightReport", "SpectrumReport", "QueryResult", "ControllerChange",
     "encode_u16", "encode_u32",
     "encode_query", "decode_query_response", "decode_ack",
     "decode_target_light_report", "decode_spectrum_report",
+    "decode_controller_change", "decode_version_response",
     "encode_fan_switch", "encode_fan_speed", "encode_fan_direction",
     "encode_light_switch", "encode_brightness", "encode_cct",
     "encode_report_config",
@@ -126,6 +127,35 @@ def decode_spectrum_report(payload: bytes) -> SpectrumReport:
         )
     seq = int.from_bytes(payload[0:2], "big")
     return SpectrumReport(seq=seq, bins=tuple(payload[2:]))
+
+
+# ---------------------------------------------------------------- 上报 0x57 (v2.22)
+@dataclass(frozen=True)
+class ControllerChange:
+    """0x57 控制器状态变化上报（风扇灯专属）。
+
+    遥控器/面板按键改动了某个参数时雷达主动上报，仅 origin=LOCAL 且值变化时发。
+    """
+
+    sub_cmd: MsgID   # 被改动的命令字 0x70~0x75
+    value: int       # 改动后的值
+
+
+def decode_controller_change(payload: bytes) -> ControllerChange:
+    if len(payload) != 2:
+        raise ValueError(f"0x57 payload must be 2 bytes, got {len(payload)}")
+    sub = payload[0]
+    if sub not in range(0x70, 0x76):
+        raise ValueError(f"0x57 sub_cmd out of range 0x70~0x75: 0x{sub:02X}")
+    return ControllerChange(sub_cmd=MsgID(sub), value=payload[1])
+
+
+# ---------------------------------------------------------------- 0x65 版本查询 (v2.22)
+def decode_version_response(payload: bytes) -> str | None:
+    """0x65 响应：ASCII 版本串；单字节错误码时返回 None。"""
+    if len(payload) == 1:
+        return None  # 错误码（NACK）
+    return payload.decode("ascii", errors="replace").strip("\x00").strip()
 
 
 # ---------------------------------------------------------------- 0x40 查询
