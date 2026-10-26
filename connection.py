@@ -227,8 +227,9 @@ class RFPDevice:
         """发送 0x40 查询并等待结果（True=返回值 / False=错误码）."""
         client = await self._ensure_connected()
         loop = asyncio.get_running_loop()
-        self._pending_query = loop.create_future()
+        # future 必须在锁内创建，否则并发调用互相覆盖（wait_for(None) 崩溃 / ACK 错配）
         async with self._lock:
+            self._pending_query = loop.create_future()
             try:
                 await client.write_gatt_char(
                     TX_CHAR_UUID,
@@ -277,8 +278,9 @@ class RFPDevice:
         """发送命令帧并等待 ACK."""
         client = await self._ensure_connected()
         loop = asyncio.get_running_loop()
-        self._pending_ack = loop.create_future()
         async with self._lock:
+            # future 必须在锁内创建，否则并发调用互相覆盖（wait_for(None) 崩溃 / ACK 错配）
+            self._pending_ack = loop.create_future()
             try:
                 await client.write_gatt_char(
                     TX_CHAR_UUID, build_host_frame(msg_id, payload), response=False
@@ -300,14 +302,20 @@ class RFPDevice:
             return False
         ok = True
         if on is not None:
-            ok &= await self._send_cmd(MsgID.LIGHT_SWITCH, encode_light_switch(on))
-            self.light_on = on
+            if await self._send_cmd(MsgID.LIGHT_SWITCH, encode_light_switch(on)):
+                self.light_on = on
+            else:
+                ok = False
         if brightness is not None:
-            ok &= await self._send_cmd(MsgID.LIGHT_BRIGHTNESS, encode_brightness(brightness))
-            self.brightness = brightness
+            if await self._send_cmd(MsgID.LIGHT_BRIGHTNESS, encode_brightness(brightness)):
+                self.brightness = brightness
+            else:
+                ok = False
         if cct is not None:
-            ok &= await self._send_cmd(MsgID.LIGHT_CCT, encode_cct(cct))
-            self.cct = cct
+            if await self._send_cmd(MsgID.LIGHT_CCT, encode_cct(cct)):
+                self.cct = cct
+            else:
+                ok = False
         self._notify()
         return ok
 
